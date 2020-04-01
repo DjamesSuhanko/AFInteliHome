@@ -7,10 +7,8 @@
 #include "afwebpage.h"
 #include <ESPAsyncWebServer.h>
 #include <LittleFS.h>
-#include <ESP8266WiFiMulti.h>
-#define IS_SSID   1
-#define IS_PASSWD 2
-#define IS_ALEXA  3
+//#include <ESP8266WiFiMulti.h>
+
 
 /*O server é async, aceita multiplas conexoes. O tratamento é feito com request.
   Na função serverSetup são tratados os callbacks do Alexa. A página de interação
@@ -27,7 +25,7 @@
   Se trocar a key e esquecer, só gravando o firmware novamente, melhor não mexer.
 */
 
-ESP8266WiFiMulti WiFiMulti;
+//ESP8266WiFiMulti WiFiMulti;
 
 AsyncWebServer server(80);
 
@@ -50,13 +48,26 @@ void loadCredentials() {
   String recipe2 = readFile(LittleFS, "/passwd.txt");
   strcpy(WIFI_PASS,recipe2.c_str());
 
-  String recipe3 = readFile(LittleFS, "/alexa.txt");
-  strcpy(ALEXA_COMMAND,recipe3.c_str());
+  String recipe3 = readFile(LittleFS, "/apssid.txt");
+  strcpy(AP_WIFI_SSID,recipe3.c_str());
+
+  String recipe4 = readFile(LittleFS, "/appasswd.txt");
+  strcpy(AP_WIFI_PASS,recipe4.c_str());
+
+  String recipe5 = readFile(LittleFS, "/alexa.txt");
+  strcpy(ALEXA_COMMAND,recipe5.c_str());
 
   Serial.println("---------------------------");
   Serial.println("L I D O   D O   A R Q U I V O");
+  Serial.print("STA SSID: ");
   Serial.println(WIFI_SSID);
+  Serial.print("STA password: ");
   Serial.println(WIFI_PASS);
+  Serial.print("AP SSID: ");
+  Serial.println(AP_WIFI_SSID);
+  Serial.print("AP password: ");
+  Serial.println(AP_WIFI_PASS);
+  Serial.print("Alexa command: ");
   Serial.println(ALEXA_COMMAND);
   Serial.println("---------------------------");
 }
@@ -70,6 +81,12 @@ void setValuesToVars(uint8_t target, char *content) {
   }
   else if (target == IS_ALEXA) {
     writeFile(LittleFS, "/alexa.txt", content);
+  }
+  else if (target == IS_APSSID) {
+    writeFile(LittleFS, "/apssid.txt", content);
+  }
+  else if (target == IS_APPASSWD) {
+    writeFile(LittleFS, "/appasswd.txt", content);
   }
 }
 
@@ -203,14 +220,20 @@ void serverSetup() {
       return request->requestAuthentication();
 
     AsyncResponseStream *response = request->beginResponseStream("text/html");
-    response->print("<html><body>SSID: ");
+    response->print("<html><body>STA SSID: ");
     response->print(String(WIFI_SSID));
-    Serial.print("Isso tem que aparecer: ");
-    Serial.println(WIFI_SSID);
     response->print("<br>");
 
-    response->print("PASSWORD: ");
+    response->print("STA PASSWORD: ");
     response->print(String(WIFI_PASS));
+    response->print("<br>");
+
+    response->print("AP SSID: ");
+    response->print(String(AP_WIFI_SSID));
+    response->print("<br>");
+
+    response->print("AP PASSWORD: ");
+    response->print(String(AP_WIFI_PASS));
     response->print("<br>");
 
     response->print("IDENTIFICADOR: ");
@@ -266,6 +289,20 @@ void serverSetup() {
       setValuesToVars(IS_ALEXA, ALEXA_COMMAND);
     }
 
+    if (request->hasParam("input_apssid")) {
+      memset(AP_WIFI_SSID, 0, 51);
+      strcpy(AP_WIFI_SSID, request->getParam("input_apssid")->value().c_str());
+      Serial.println(AP_WIFI_SSID);
+      setValuesToVars(IS_APSSID, AP_WIFI_SSID);
+    }
+
+    if (request->hasParam("input_appasswd")) {
+      memset(AP_WIFI_PASS, 0, 51);
+      strcpy(AP_WIFI_PASS, request->getParam("input_appasswd")->value().c_str());
+      Serial.println(AP_WIFI_PASS);
+      setValuesToVars(IS_APPASSWD, AP_WIFI_PASS);
+    }
+
     request->send(200, "text/plain", "Aplicado. Reiniciando...");
     ESP.restart();
 
@@ -296,9 +333,12 @@ void wifiSetup() {
 
   startCredentials();
   loadCredentials();
-  // Set WIFI module to STA mode
+  // Set WIFI module to AP+STA mode
+  WiFi.softAPConfig(staticIP,gateway,subnet);
+  WiFi.softAP(AP_WIFI_SSID,AP_WIFI_PASS);
   WiFi.mode(WIFI_AP_STA);
-  WiFiMulti.addAP(AP_WIFI_SSID, AP_WIFI_PASS);
+  //WiFiMulti.addAP(AP_WIFI_SSID, AP_WIFI_PASS);
+  
 
   // Connect
   Serial.printf("[WIFI] Connecting to %s ", WIFI_SSID);
@@ -319,8 +359,10 @@ void wifiSetup() {
 
   // Connected!
   if (WiFi.status() == WL_CONNECTED){
-    Serial.printf("[WIFI] STATION Mode, SSID: %s, IP address: %s\n", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
+    Serial.printf("[WiFi] STATION Mode, SSID: %s, IP address: %s\n", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
     Serial.println(WiFi.macAddress());
+    Serial.print("[WiFi] AP Mode, IP address: ");
+    Serial.println(WiFi.softAPIP());
   }
 
 
@@ -344,6 +386,7 @@ void setup() {
     Serial.println("exists all 3 files!!!!!");
   }
 
+  delay(2000); //pra dar tempo de ler tudo na serial
 
 
   // Wifi
@@ -417,8 +460,8 @@ void loop() {
     Serial.printf("[MAIN] Free heap: %d bytes\n", ESP.getFreeHeap());
   }
 
-  if ((WiFiMulti.run() == WL_CONNECTED)){
-    uint8_t ok = 1;
-  }
+  //if ((WiFiMulti.run() == WL_CONNECTED)){
+  //  uint8_t ok = 1;
+  //}
 
 }
