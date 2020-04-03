@@ -38,9 +38,16 @@ div {
   <form action="/setup">
     <label for="fname">Sua rede (SSID):</label> <input type="text" name="input_ssid"><br>
     <label for="fname">Senha da sua rede:</label> <input type="text" name="input_passwd"><br>
+    <br><br>
     <label for="fname">Nome para rede de configuracao:</label><input type="text" name="input_apssid"><br>
     <label for="fname">Senha para a rede de configuracao:</label><input type="text" name="input_appasswd"><br>
+    <br><br>
+    <label for="fname">Usuario administrativo</label> <input type="text" name="input_admin_u"><br>
+    <label for="fname">Senha administrativa</label> <input type="text" name="input_admin_p"><br>
+    <br><br>
     <label for="fname">Chamada para Alexa ("Alexa, ligar..."):</label> <input type="text" name="input_command"><br>
+    
+    
     <input type="submit" value="Submit">
   </form><br>
 </body></html>)rawliteral";

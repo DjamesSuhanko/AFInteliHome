@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 //#include <ESPAsyncUDP.h>
-//#include <ESPAsyncTCP.h>
+#include <ESPAsyncTCP.h>
 #include "fauxmoESP.h"
 #include "credentials.h"
 #include "afwebpage.h"
@@ -27,7 +27,7 @@
 
 //ESP8266WiFiMulti WiFiMulti;
 
-AsyncWebServer server(80);
+AsyncWebServer server(HTTP_PORT);
 
 using namespace fs;
 // ws://ip/ws
@@ -57,6 +57,12 @@ void loadCredentials() {
   String recipe5 = readFile(LittleFS, "/alexa.txt");
   strcpy(ALEXA_COMMAND,recipe5.c_str());
 
+  String recipe6 = readFile(LittleFS, "/adminuser.txt");
+  strcpy(LOGIN_USER,recipe6.c_str());
+
+  String recipe7 = readFile(LittleFS, "/adminpass.txt");
+  strcpy(LOGIN_PASS,recipe7.c_str());
+
   Serial.println("---------------------------");
   Serial.println("L I D O   D O   A R Q U I V O");
   Serial.print("STA SSID: ");
@@ -69,6 +75,10 @@ void loadCredentials() {
   Serial.println(AP_WIFI_PASS);
   Serial.print("Alexa command: ");
   Serial.println(ALEXA_COMMAND);
+  Serial.print("Administrador: ");
+  Serial.println(LOGIN_USER);
+  Serial.print("Senha admin: ");
+  Serial.println(LOGIN_PASS);
   Serial.println("---------------------------");
 }
 
@@ -87,6 +97,12 @@ void setValuesToVars(uint8_t target, char *content) {
   }
   else if (target == IS_APPASSWD) {
     writeFile(LittleFS, "/appasswd.txt", content);
+  }
+  else if (target == IS_ADMIN_U) {
+    writeFile(LittleFS, "/adminuser.txt", content);
+  }
+  else if (target == IS_ADMIN_P) {
+    writeFile(LittleFS, "/adminpass.txt", content);
   }
 }
 
@@ -122,6 +138,13 @@ String readFile(fs::FS &fs, char *filename) {
   File file = fs.open(path, "r");
   if (!file || file.isDirectory()) {
     Serial.println("Failed to open file for reading");
+    /*infeliz condicao. Arrumar isso*/
+    if (strcmp(filename,"/adminuser.txt") == 0 ||  strcmp(filename,"/adminpass.txt") == 0){
+      return "admin";
+    }
+    if (strcmp(filename,"/apssid.txt") == 0 ||  strcmp(filename,"/appasswd.txt") == 0){
+      return "afintelihome";
+    }
     return "ouch! You cant read it.";
   }
 
@@ -134,6 +157,7 @@ String readFile(fs::FS &fs, char *filename) {
   }
   file.close();
   Serial.println(buf);
+
   return buf;
 }
 
@@ -165,6 +189,7 @@ void serverSetup() {
 
   server.on("/index.html", HTTP_GET, [](AsyncWebServerRequest * request) {
     request->send(200, "text/plain", "Hello, world");
+    Serial.println("HOUVE REQUISICAO!!!!!!!");
   });
 
   // These two callbacks are required for gen1 and gen3 compatibility
@@ -192,7 +217,7 @@ void serverSetup() {
   server.on("/login",
             HTTP_GET,
   [](AsyncWebServerRequest * request) {
-    if (!request->authenticate(http_username, http_password))
+    if (!request->authenticate(LOGIN_USER, LOGIN_PASS))
       return request->requestAuthentication();
     request->send(200, "text/plain", "Login Ok");
   }
@@ -201,7 +226,7 @@ void serverSetup() {
   server.on("/config",
             HTTP_GET,
   [](AsyncWebServerRequest * request) {
-    if (!request->authenticate(http_username, http_password))
+    if (!request->authenticate(LOGIN_USER, LOGIN_PASS))
       return request->requestAuthentication();
 
     //AsyncResponseStream *response = request->beginResponseStream("text/html");
@@ -216,7 +241,7 @@ void serverSetup() {
   server.on("/credenciais",
             HTTP_GET,
   [](AsyncWebServerRequest * request) {
-    if (!request->authenticate(http_username, http_password))
+    if (!request->authenticate(LOGIN_USER, LOGIN_PASS))
       return request->requestAuthentication();
 
     AsyncResponseStream *response = request->beginResponseStream("text/html");
@@ -234,6 +259,14 @@ void serverSetup() {
 
     response->print("AP PASSWORD: ");
     response->print(String(AP_WIFI_PASS));
+    response->print("<br>");
+
+    response->print("ADMIN USER: ");
+    response->print(String(LOGIN_USER));
+    response->print("<br>");
+
+    response->print("ADMIN PASS: ");
+    response->print(String(LOGIN_PASS));
     response->print("<br>");
 
     response->print("IDENTIFICADOR: ");
@@ -262,7 +295,7 @@ void serverSetup() {
   server.on("/setup",
             HTTP_GET,
   [](AsyncWebServerRequest * request) {
-    if (!request->authenticate(http_username, http_password))
+    if (!request->authenticate(LOGIN_USER, LOGIN_PASS))
       return request->requestAuthentication();
 
     String converter;
@@ -302,6 +335,21 @@ void serverSetup() {
       Serial.println(AP_WIFI_PASS);
       setValuesToVars(IS_APPASSWD, AP_WIFI_PASS);
     }
+
+    if (request->hasParam("input_admin_u")) {
+      memset(LOGIN_USER, 0, 51);
+      strcpy(LOGIN_USER, request->getParam("input_admin_u")->value().c_str());
+      Serial.println(LOGIN_USER);
+      setValuesToVars(IS_ADMIN_U, LOGIN_USER);
+    }
+
+    if (request->hasParam("input_admin_p")) {
+      memset(LOGIN_PASS, 0, 51);
+      strcpy(LOGIN_PASS, request->getParam("input_admin_p")->value().c_str());
+      Serial.println(LOGIN_PASS);
+      setValuesToVars(IS_ADMIN_P, LOGIN_PASS);
+    }
+
 
     request->send(200, "text/plain", "Aplicado. Reiniciando...");
     ESP.restart();
@@ -382,9 +430,6 @@ void setup() {
   if (!LittleFS.begin()) {
     Serial.println("Couldn't mount the filesystem.");
   }
-  if (LittleFS.exists("/ssid.txt") && LittleFS.exists("/passwd.txt") && LittleFS.exists("/alexa.txt")) {
-    Serial.println("exists all 3 files!!!!!");
-  }
 
   delay(2000); //pra dar tempo de ler tudo na serial
 
@@ -395,11 +440,13 @@ void setup() {
   // Web server
   serverSetup();
 
+  delay(2000);
+
   // Set fauxmoESP to not create an internal TCP server and redirect requests to the server on the defined port
   // The TCP port must be 80 for gen3 devices (default is 1901)
   // This has to be done before the call to enable()
   fauxmo.createServer(false);
-  fauxmo.setPort(80); // This is required for gen3 devices
+  fauxmo.setPort(HTTP_PORT); // This is required for gen3 devices
 
   // You have to call enable(true) once you have a WiFi connection
   // You can enable or disable the library at any moment
@@ -412,7 +459,7 @@ void setup() {
   // "Alexa, set kitchen to fifty" (50 means 50% of brightness)
 
   // Add virtual devices
-  fauxmo.addDevice("luz da bancada");
+  fauxmo.addDevice(ALEXA_COMMAND);
 
 
   // You can add more devices
