@@ -39,6 +39,18 @@ bool shouldReboot = false;
 
 fauxmoESP fauxmo;
 
+bool rele_state_button = HIGH;
+unsigned long int last_time = millis();
+
+void ISRrele(){
+  if (digitalRead(2) == LOW){
+    Serial.println("Botao acionado");
+    rele_state_button = (millis()-last_time) > 1000 ? !rele_state_button : rele_state_button;
+    digitalWrite(0,rele_state_button); 
+    last_time = millis();
+  }
+}
+
 void deleteFile(fs::FS &fs, char *filename);
 
 void loadCredentials() {
@@ -427,6 +439,8 @@ void setup() {
   pinMode(RELE0, OUTPUT);
   digitalWrite(RELE0, HIGH); // Our LED has inverse logic (high for OFF, low for ON)
 
+  pinMode(2,INPUT);
+
   if (!LittleFS.begin()) {
     Serial.println("Couldn't mount the filesystem.");
   }
@@ -510,5 +524,7 @@ void loop() {
   //if ((WiFiMulti.run() == WL_CONNECTED)){
   //  uint8_t ok = 1;
   //}
+  delay(5);
+  ISRrele();
 
 }
